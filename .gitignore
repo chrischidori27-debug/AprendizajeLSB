@@ -1,0 +1,32 @@
+
+# Archivos compilados
+*.class
+*.log
+
+# Archivos temporales de Java
+*.ctxt
+.mtj.tmp/
+hs_err_pid*
+replay_pid*
+
+# Kotlin
+.kotlin/
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android
+local.properties
+.externalNativeBuild/
+.cxx/
+captures/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
