@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
@@ -19,15 +20,27 @@ class HandLandmarkerHelper(
 ) {
 
     private var detector: HandLandmarker? = null
+    private var usandoGpu = false
 
     init {
-        try {
+        detector = crearDetector(context, USAR_GPU)
+        if (detector == null && USAR_GPU) {
+            alCambiarEstado("GPU no disponible, probando con CPU...")
+            detector = crearDetector(context, false)
+        }
+        if (detector != null) {
+            alCambiarEstado("Detector: listo (${if (usandoGpu) "GPU" else "CPU"})")
+        }
+    }
+
+    private fun crearDetector(context: Context, gpu: Boolean): HandLandmarker? {
+        return try {
             val opcionesBase = BaseOptions.builder()
                 .setModelAssetPath("hand_landmarker.task")
-                .build()
+            if (gpu) opcionesBase.setDelegate(Delegate.GPU)
 
             val opciones = HandLandmarker.HandLandmarkerOptions.builder()
-                .setBaseOptions(opcionesBase)
+                .setBaseOptions(opcionesBase.build())
                 .setNumHands(1)
                 .setMinHandDetectionConfidence(0.5f)
                 .setMinHandPresenceConfidence(0.5f)
@@ -35,17 +48,20 @@ class HandLandmarkerHelper(
                 .setRunningMode(RunningMode.LIVE_STREAM)
                 .setResultListener { resultado, imagen ->
                     alRecibirResultado(resultado, imagen.width, imagen.height)
-                }                .setErrorListener { error ->
+                }
+                .setErrorListener { error ->
                     Log.e(ETIQUETA, "Error de MediaPipe", error)
                     alCambiarEstado("ERROR MediaPipe: ${error.message}")
                 }
                 .build()
 
-            detector = HandLandmarker.createFromOptions(context, opciones)
-            alCambiarEstado("Detector: listo")
+            val creado = HandLandmarker.createFromOptions(context, opciones)
+            usandoGpu = gpu
+            creado
         } catch (e: Throwable) {
-            Log.e(ETIQUETA, "No se pudo crear el detector de manos", e)
-            alCambiarEstado("ERROR al crear el detector: ${e.message}")
+            Log.e(ETIQUETA, "No se pudo crear el detector (gpu=$gpu)", e)
+            alCambiarEstado("ERROR al crear el detector (${if (gpu) "GPU" else "CPU"}): ${e.message}")
+            null
         }
     }
 
@@ -85,5 +101,8 @@ class HandLandmarkerHelper(
 
     companion object {
         private const val ETIQUETA = "AprendizajeLSB"
+
+        // true = intenta usar la GPU; false = solo CPU
+        private const val USAR_GPU = true
     }
 }

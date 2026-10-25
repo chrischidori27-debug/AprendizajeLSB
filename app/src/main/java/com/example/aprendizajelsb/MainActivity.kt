@@ -34,6 +34,14 @@ class MainActivity : AppCompatActivity() {
     // Un solo hilo para analizar imágenes sin bloquear la interfaz
     private lateinit var ejecutorCamara: ExecutorService
     private var detectorMano: HandLandmarkerHelper? = null
+    companion object {
+        // Frecuencia a la que se envían fotogramas a MediaPipe
+        private const val FPS_OBJETIVO = 10
+
+        // En este teléfono, la mano derecha llega con la etiqueta "Left"
+        private const val ETIQUETA_MANO_DERECHA = "Left"
+    }
+    private var ultimoEnvio = 0L
 
     // Datos que se muestran en pantalla
     @Volatile private var estadoDetector = "Detector: cargando..."
@@ -136,7 +144,10 @@ class MainActivity : AppCompatActivity() {
                 .build()
             analisis.setAnalyzer(ejecutorCamara) { imagen ->
                 val detector = detectorMano
-                if (detector != null) {
+                val ahora = SystemClock.uptimeMillis()
+                // El margen de 15 ms evita perder fotogramas por pequeñas variaciones
+                if (detector != null && ahora - ultimoEnvio >= 1000L / FPS_OBJETIVO - 15) {
+                    ultimoEnvio = ahora
                     fotogramasEnviados++
                     detector.detectar(imagen)
                 } else {
@@ -170,8 +181,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             val puntos = resultado.landmarks()[0]
             overlay.actualizar(puntos, ancho, alto)
-            val lado = resultado.handednesses()[0][0].categoryName()
-            estadoMano = "Mano: $lado | puntos: ${puntos.size}"
+            val etiqueta = resultado.handednesses()[0][0].categoryName()
+            val lado = if (etiqueta == ETIQUETA_MANO_DERECHA) "derecha" else "izquierda"
+            estadoMano = "Mano $lado | puntos: ${puntos.size}"
         }
 
         val ahora = SystemClock.uptimeMillis()
