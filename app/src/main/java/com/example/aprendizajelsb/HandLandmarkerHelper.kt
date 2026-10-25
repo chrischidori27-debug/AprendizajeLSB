@@ -14,7 +14,7 @@ import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
 
 class HandLandmarkerHelper(
     context: Context,
-    private val alRecibirResultado: (HandLandmarkerResult) -> Unit,
+    private val alRecibirResultado: (HandLandmarkerResult, Int, Int) -> Unit,
     private val alCambiarEstado: (String) -> Unit
 ) {
 
@@ -33,8 +33,9 @@ class HandLandmarkerHelper(
                 .setMinHandPresenceConfidence(0.5f)
                 .setMinTrackingConfidence(0.5f)
                 .setRunningMode(RunningMode.LIVE_STREAM)
-                .setResultListener { resultado, _ -> alRecibirResultado(resultado) }
-                .setErrorListener { error ->
+                .setResultListener { resultado, imagen ->
+                    alRecibirResultado(resultado, imagen.width, imagen.height)
+                }                .setErrorListener { error ->
                     Log.e(ETIQUETA, "Error de MediaPipe", error)
                     alCambiarEstado("ERROR MediaPipe: ${error.message}")
                 }

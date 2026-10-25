@@ -26,6 +26,7 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
+    private lateinit var overlay: OverlayView
     private lateinit var mensajePermiso: TextView
     private lateinit var botonPermiso: Button
     private lateinit var textoEstado: TextView
@@ -40,6 +41,13 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var fotogramasEnviados = 0
     @Volatile private var resultadosRecibidos = 0
     private var ultimaActualizacion = 0L
+
+    // Medición de fps (se recalcula cada segundo)
+    @Volatile private var fpsEnviados = 0f
+    @Volatile private var fpsResultados = 0f
+    private var inicioMedicion = 0L
+    private var enviadosAlInicio = 0
+    private var resultadosAlInicio = 0
 
     // Recibe la respuesta del usuario al cuadro de permiso de cámara
     private val solicitarPermisoCamara =
@@ -68,6 +76,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         previewView = findViewById(R.id.previewView)
+        overlay = findViewById(R.id.overlay)
         mensajePermiso = findViewById(R.id.mensajePermiso)
         botonPermiso = findViewById(R.id.botonPermiso)
         textoEstado = findViewById(R.id.textoEstado)
@@ -103,7 +112,9 @@ class MainActivity : AppCompatActivity() {
             if (detectorMano == null) {
                 detectorMano = HandLandmarkerHelper(
                     this,
-                    alRecibirResultado = { resultado -> registrarResultado(resultado) },
+                    alRecibirResultado = { resultado, ancho, alto ->
+                        registrarResultado(resultado, ancho, alto)
+                    },
                     alCambiarEstado = { texto ->
                         estadoDetector = texto
                         actualizarPantalla()
@@ -149,31 +160,49 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    // Guarda el resultado de MediaPipe y refresca la pantalla unas 5 veces por segundo
-    private fun registrarResultado(resultado: HandLandmarkerResult) {
+    // Guarda el resultado de MediaPipe, dibuja los puntos y refresca el texto
+    private fun registrarResultado(resultado: HandLandmarkerResult, ancho: Int, alto: Int) {
         resultadosRecibidos++
 
-        estadoMano = if (resultado.landmarks().isEmpty()) {
-            "Mano: no detectada"
+        if (resultado.landmarks().isEmpty()) {
+            overlay.limpiar()
+            estadoMano = "Mano: no detectada"
         } else {
             val puntos = resultado.landmarks()[0]
-            val muneca = puntos[0]
+            overlay.actualizar(puntos, ancho, alto)
             val lado = resultado.handednesses()[0][0].categoryName()
-            "Mano: $lado | puntos: ${puntos.size}\n" +
-                    "Muñeca: x=${"%.2f".format(muneca.x())} y=${"%.2f".format(muneca.y())}"
+            estadoMano = "Mano: $lado | puntos: ${puntos.size}"
         }
 
         val ahora = SystemClock.uptimeMillis()
+        calcularFps(ahora)
         if (ahora - ultimaActualizacion >= 200) {
             ultimaActualizacion = ahora
             actualizarPantalla()
         }
     }
 
+    private fun calcularFps(ahora: Long) {
+        if (inicioMedicion == 0L) {
+            inicioMedicion = ahora
+            enviadosAlInicio = fotogramasEnviados
+            resultadosAlInicio = resultadosRecibidos
+            return
+        }
+        val transcurrido = ahora - inicioMedicion
+        if (transcurrido >= 1000) {
+            fpsEnviados = (fotogramasEnviados - enviadosAlInicio) * 1000f / transcurrido
+            fpsResultados = (resultadosRecibidos - resultadosAlInicio) * 1000f / transcurrido
+            inicioMedicion = ahora
+            enviadosAlInicio = fotogramasEnviados
+            resultadosAlInicio = resultadosRecibidos
+        }
+    }
+
     private fun actualizarPantalla() {
         val texto = "$estadoDetector\n" +
-                "Fotogramas enviados: $fotogramasEnviados\n" +
-                "Resultados recibidos: $resultadosRecibidos\n" +
+                "Fps enviados a MediaPipe: ${"%.1f".format(fpsEnviados)}\n" +
+                "Fps de resultados (detección real): ${"%.1f".format(fpsResultados)}\n" +
                 estadoMano
         runOnUiThread { textoEstado.text = texto }
     }
